@@ -4,6 +4,12 @@ Simulador desktop da máquina de dinheiro ATCash, desenvolvido para testes e des
 
 ---
 
+## Screenshot
+
+![ATCash Simulator](docs/screenshot.png)
+
+---
+
 ## Tecnologia
 
 | Camada | Tecnologia |
@@ -32,42 +38,57 @@ key.pem
 
 ## Interface
 
-### Visão geral
-
-A janela abre maximizada com três áreas principais:
+A janela abre maximizada com o seguinte layout:
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  ATCash Simulator         https://127.0.0.1:44333        │
-├──────────┬──────────────────────────────────────────────┤
-│          │  Transação Ativa  │  Cenário de Retorno       │
-│ Sidebar  ├──────────────────────────────────────────────┤
-│ (ações)  │  SELECT VALUES    │  Simulation Values        │
-│          ├──────────────────────────────────────────────┤
-│          │  API Log                                      │
-└──────────┴──────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  ATCash Simulator   [Tema]       Running in https://...      │
+├──────────┬──────────────────────────────────────────────────┤
+│          │  DEVICE STATUS  │  ERROR OR WARNING SIMULATION    │
+│ Sidebar  ├──────────────────────────────────────────────────┤
+│ (ações)  │  TRANSACAO ACTIVA                                 │
+│          ├──────────────────────────────────────────────────┤
+│          │  SELECT VALUES                                    │
+│          ├─────────────────┬────────────────────────────────┤
+│          │ SIMULATION      │  API LOG                        │
+│          │ VALUES          │                                 │
+└──────────┴─────────────────┴────────────────────────────────┘
 ```
+
+### Header
+
+- **Tema** — alterna entre tema claro e escuro
+- **Running in https://127.0.0.1:44333** — endereço do servidor simulado
 
 ### Sidebar — Ações
 
+| Botão | Quando disponível | Função |
+|---|---|---|
+| **Finalizar Pagamento** | Transação ativa | Conclui como `COMPLETED` com troco calculado |
+| **Devolver Dinheiro** | Transação ativa | Aplica o cenário de erro selecionado (`COMPLETED_WITH_ERRORS`) |
+| **Cancelar** | Transação ativa | Cancela a operação em curso |
+
+### Device Status
+
+Indicadores do estado dos subsistemas simulados:
+
+| Campo | Descrição |
+|---|---|
+| **Coins** | Estado do aceitador de moedas (OK / ERR) |
+| **Bills** | Estado do aceitador de notas (OK / ERR) |
+| **API** | Estado da API (IDLE / IN USE) |
+
+### Error or Warning Simulation
+
+Permite configurar o comportamento do botão **Devolver Dinheiro**:
+
 | Botão | Função |
 |---|---|
-| **Finalizar Pagamento** | Conclui a transação como `COMPLETED` com troco calculado |
-| **Devolver** | Aplica o cenário de retorno selecionado (`COMPLETED_WITH_ERRORS`) |
-| **Cancelar** | Cancela a transação em curso |
+| **Dropdown** | Seleciona o cenário de erro a simular |
+| **Info** | Exibe detalhes do cenário selecionado |
+| **Simular Erro** | Aplica o cenário e retorna `COMPLETED_WITH_ERRORS` |
 
-### Transação Ativa
-
-Exibe os dados da operação em andamento:
-
-- **Status** — `STARTED` / `COMPLETED` / `COMPLETED_WITH_ERRORS`
-- **Pedido** — valor solicitado pelo ZSRest
-- **Entregue** — valor inserido pelo operador (via botões de denominação)
-- **Troco** — diferença calculada automaticamente
-
-### Cenários de Retorno
-
-Permite simular as respostas de erro que o equipamento real pode devolver ao clicar em **Devolver**:
+#### Cenários disponíveis
 
 | Cenário | Resposta da API |
 |---|---|
@@ -81,14 +102,29 @@ Permite simular as respostas de erro que o equipamento real pode devolver ao cli
 | Bloqueada pelo Admin | `errors=["MachineLockedByAdmin"]` |
 | Op. Incompleta | `errors=["ImcompleteOperation"]` |
 
+### Transação Activa
+
+Exibe os dados da operação em andamento:
+
+- **Status** — `STARTED` / `COMPLETED` / `COMPLETED_WITH_ERRORS`
+- **Pedido** — valor solicitado pelo ZSRest
+- **Entregue** — valor inserido pelo operador (via botões de denominação)
+- **Troco** — diferença calculada automaticamente
+
+Quando não há transação ativa exibe: *"Aguardando chamada POST /v2/pay do ZSRest..."*
+
 ### SELECT VALUES — Inserção de denominações
 
-Grade de botões para simular a inserção manual de moedas e notas:
+Grade de denominações com controles **−** e **+** por unidade, quantidade inserida e totais acumulados:
 
 **Moedas:** 1c · 2c · 5c · 10c · 20c · 50c · 1€ · 2€  
 **Notas:** 5€ · 10€ · 20€ · 50€ · 100€ · 200€ · 500€
 
-Cada clique adiciona a denominação ao valor entregue. Há também botão de desfazer (↩) para remover a última inserida.
+| Botão | Função |
+|---|---|
+| **+** / **−** | Adiciona ou remove unidades de uma denominação |
+| **Reset Values** | Zera todas as denominações |
+| **Simulate** | Confirma os valores inseridos na transação |
 
 ### Simulation Values
 
@@ -96,10 +132,10 @@ Painel de monitoramento em tempo real:
 
 | Campo | Descrição |
 |---|---|
-| Coins | Total em moedas inseridas |
-| Bills | Total em notas inseridas |
-| Total | Soma de moedas + notas |
-| Troco Devolvido | Valor do troco da última operação concluída |
+| **Coins** | Total em moedas inseridas |
+| **Bills** | Total em notas inseridas |
+| **Total** | Soma de moedas + notas |
+| **Troco Devolvido** | Valor do troco da última operação `COMPLETED` |
 
 > Os valores são resetados para `—` ao início de cada nova operação.
 
@@ -113,17 +149,18 @@ Exibe as últimas chamadas REST recebidas com timestamp, endpoint e payload resu
 
 ### Pagamento com sucesso (troco)
 
-1. O ZSRest inicia uma operação de pagamento — o campo **Pedido** é preenchido
-2. Clicar nas denominações até atingir ou superar o valor pedido
-3. Clicar em **Finalizar Pagamento**
-4. O simulador retorna `COMPLETED` com `totalInput` = valor entregue
-5. O ZSRest calcula e exibe o troco (`Entregue − Pedido`)
+1. O ZSRest inicia uma operação — o campo **Pedido** é preenchido na Transação Activa
+2. Usar os botões **+** nas denominações para compor o valor entregue
+3. Clicar em **Simulate** para confirmar os valores
+4. Clicar em **Finalizar Pagamento**
+5. O simulador retorna `COMPLETED` com `totalInput` = valor entregue
+6. O ZSRest calcula e exibe o troco (`Entregue − Pedido`)
 
 ### Simulação de erro
 
 1. Iniciar uma operação de pagamento normalmente
-2. Selecionar o cenário desejado no dropdown **Cenário de Retorno**
-3. Clicar em **Devolver**
+2. Selecionar o cenário desejado no dropdown **Error or Warning Simulation**
+3. Clicar em **Simular Erro** ou em **Devolver Dinheiro** na sidebar
 4. O simulador retorna `COMPLETED_WITH_ERRORS` com os erros do cenário
 
 > **Atenção:** No equipamento real, a finalização é automática assim que o valor pedido é atingido. No simulador é necessário clicar em **Finalizar Pagamento** manualmente.
