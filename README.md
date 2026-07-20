@@ -1,0 +1,160 @@
+# ATCash Simulator
+
+Simulador desktop da máquina de dinheiro ATCash, desenvolvido para testes e desenvolvimento da integração ZSRest com o equipamento físico ATCash.
+
+---
+
+## Tecnologia
+
+| Camada | Tecnologia |
+|---|---|
+| Servidor REST | Node.js (HTTPS, porta 44333) |
+| Interface | HTML/CSS/JS gerado inline |
+| Desktop | Electron (janela nativa Windows) |
+| Certificado SSL | Auto-gerado via OpenSSL (Git for Windows) |
+| Build/Distribuição | electron-builder (portable exe) |
+
+---
+
+## Distribuição
+
+Para usar o simulador em outro computador, copiar os 3 arquivos juntos:
+
+```
+ATCashSimulator.exe
+cert.pem
+key.pem
+```
+
+> Os arquivos `cert.pem` e `key.pem` são gerados automaticamente na primeira execução, na mesma pasta do executável, desde que o Git for Windows esteja instalado. Se já existirem, são reutilizados.
+
+---
+
+## Interface
+
+### Visão geral
+
+A janela abre maximizada com três áreas principais:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  ATCash Simulator         https://127.0.0.1:44333        │
+├──────────┬──────────────────────────────────────────────┤
+│          │  Transação Ativa  │  Cenário de Retorno       │
+│ Sidebar  ├──────────────────────────────────────────────┤
+│ (ações)  │  SELECT VALUES    │  Simulation Values        │
+│          ├──────────────────────────────────────────────┤
+│          │  API Log                                      │
+└──────────┴──────────────────────────────────────────────┘
+```
+
+### Sidebar — Ações
+
+| Botão | Função |
+|---|---|
+| **Finalizar Pagamento** | Conclui a transação como `COMPLETED` com troco calculado |
+| **Devolver** | Aplica o cenário de retorno selecionado (`COMPLETED_WITH_ERRORS`) |
+| **Cancelar** | Cancela a transação em curso |
+
+### Transação Ativa
+
+Exibe os dados da operação em andamento:
+
+- **Status** — `STARTED` / `COMPLETED` / `COMPLETED_WITH_ERRORS`
+- **Pedido** — valor solicitado pelo ZSRest
+- **Entregue** — valor inserido pelo operador (via botões de denominação)
+- **Troco** — diferença calculada automaticamente
+
+### Cenários de Retorno
+
+Permite simular as respostas de erro que o equipamento real pode devolver ao clicar em **Devolver**:
+
+| Cenário | Resposta da API |
+|---|---|
+| Reciclador Cheio (sem erro) ⚠️ BUG | `errors=[]` — simula o bug ZSMPOS-8689 |
+| Reciclador Cheio (DeviceIsFull) | `errors=["DeviceIsFull"]` |
+| Cashbox Cheia | `errors=["CashboxIsFull"]` |
+| Sem Dinheiro (Hopper) | `errors=["HopperNotEnoughMoney"]` |
+| Sem Troco Exato | `errors=["NOTEXACTMONEY"]` |
+| Hopper Encravado | `errors=["HopperJammed"]` |
+| NV Encravado | `errors=["NVJammed"]` |
+| Bloqueada pelo Admin | `errors=["MachineLockedByAdmin"]` |
+| Op. Incompleta | `errors=["ImcompleteOperation"]` |
+
+### SELECT VALUES — Inserção de denominações
+
+Grade de botões para simular a inserção manual de moedas e notas:
+
+**Moedas:** 1c · 2c · 5c · 10c · 20c · 50c · 1€ · 2€  
+**Notas:** 5€ · 10€ · 20€ · 50€ · 100€ · 200€ · 500€
+
+Cada clique adiciona a denominação ao valor entregue. Há também botão de desfazer (↩) para remover a última inserida.
+
+### Simulation Values
+
+Painel de monitoramento em tempo real:
+
+| Campo | Descrição |
+|---|---|
+| Coins | Total em moedas inseridas |
+| Bills | Total em notas inseridas |
+| Total | Soma de moedas + notas |
+| Troco Devolvido | Valor do troco da última operação concluída |
+
+> Os valores são resetados para `—` ao início de cada nova operação.
+
+### API Log
+
+Exibe as últimas chamadas REST recebidas com timestamp, endpoint e payload resumido (máximo 300 entradas).
+
+---
+
+## Fluxo de uso
+
+### Pagamento com sucesso (troco)
+
+1. O ZSRest inicia uma operação de pagamento — o campo **Pedido** é preenchido
+2. Clicar nas denominações até atingir ou superar o valor pedido
+3. Clicar em **Finalizar Pagamento**
+4. O simulador retorna `COMPLETED` com `totalInput` = valor entregue
+5. O ZSRest calcula e exibe o troco (`Entregue − Pedido`)
+
+### Simulação de erro
+
+1. Iniciar uma operação de pagamento normalmente
+2. Selecionar o cenário desejado no dropdown **Cenário de Retorno**
+3. Clicar em **Devolver**
+4. O simulador retorna `COMPLETED_WITH_ERRORS` com os erros do cenário
+
+> **Atenção:** No equipamento real, a finalização é automática assim que o valor pedido é atingido. No simulador é necessário clicar em **Finalizar Pagamento** manualmente.
+
+---
+
+## API REST simulada
+
+O simulador expõe os endpoints da ATCash REST API v2 em `https://127.0.0.1:44333`:
+
+| Método | Endpoint | Descrição |
+|---|---|---|
+| GET | `/v2/heartbeat` | Health check |
+| POST | `/v2/payment/start` | Inicia pagamento |
+| GET | `/v2/payment/status/{uuid}` | Consulta status |
+| POST | `/v2/payment/finalize/{uuid}` | Finaliza manualmente |
+| POST | `/v2/payment/cancel/{uuid}` | Cancela operação |
+| GET | `/v2/levels` | Retorna níveis de cédulas/moedas |
+| GET | `/` | Interface web |
+
+SSL auto-assinado — o cliente deve ignorar erros de certificado (já configurado no ZSRest e no Electron).
+
+---
+
+## Build
+
+```bash
+npm install
+npm run dist
+```
+
+Gera: `dist/ATCashSimulator.exe` (portable, sem instalação)
+
+> Requer Node.js e npm instalados.
