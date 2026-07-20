@@ -1,6 +1,6 @@
 # ATCash Simulator
 
-Simulador desktop da máquina de dinheiro ATCash, desenvolvido para testes e desenvolvimento da integração Software de Restaurante com o equipamento físico ATCash.
+Simulador desktop da máquina de dinheiro ATCash, desenvolvido para simular o comportamento do equipamento físico ATCash.
 
 ---
 
@@ -41,18 +41,18 @@ key.pem
 A janela abre maximizada com o seguinte layout:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  ATCash Simulator   [Tema]       Running in https://...      │
-├──────────┬──────────────────────────────────────────────────┤
-│          │  DEVICE STATUS  │  ERROR OR WARNING SIMULATION    │
-│ Sidebar  ├──────────────────────────────────────────────────┤
-│ (ações)  │  TRANSACAO ACTIVA                                 │
-│          ├──────────────────────────────────────────────────┤
-│          │  SELECT VALUES                                    │
-│          ├─────────────────┬────────────────────────────────┤
-│          │ SIMULATION      │  API LOG                        │
-│          │ VALUES          │                                 │
-└──────────┴─────────────────┴────────────────────────────────┘
++-------------------------------------------------------------+
+|  ATCash Simulator   [Tema]       Running in https://...     |
++----------+--------------------------------------------------+
+|          |  DEVICE STATUS  |  ERROR OR WARNING SIMULATION   |
+| Sidebar  +--------------------------------------------------+
+| (acoes)  |  TRANSACAO ACTIVA                                |
+|          +--------------------------------------------------+
+|          |  SELECT VALUES                                   |
+|          +-----------------+--------------------------------+
+|          | SIMULATION      |  API LOG                       |
+|          | VALUES          |                                |
++----------+-----------------+--------------------------------+
 ```
 
 ### Header
@@ -92,7 +92,7 @@ Permite configurar o comportamento do botão **Devolver Dinheiro**:
 
 | Cenário | Resposta da API |
 |---|---|
-| Reciclador Cheio (sem erro) ⚠️ BUG | `errors=[]` |
+| Reciclador Cheio (sem erro) | `errors=[]` |
 | Reciclador Cheio (DeviceIsFull) | `errors=["DeviceIsFull"]` |
 | Cashbox Cheia | `errors=["CashboxIsFull"]` |
 | Sem Dinheiro (Hopper) | `errors=["HopperNotEnoughMoney"]` |
@@ -107,11 +107,11 @@ Permite configurar o comportamento do botão **Devolver Dinheiro**:
 Exibe os dados da operação em andamento:
 
 - **Status** — `STARTED` / `COMPLETED` / `COMPLETED_WITH_ERRORS`
-- **Pedido** — valor solicitado pelo Software de Restaurante
+- **Pedido** — valor solicitado pelo sistema integrado
 - **Entregue** — valor inserido pelo operador (via botões de denominação)
 - **Troco** — diferença calculada automaticamente
 
-Quando não há transação ativa exibe: *"Aguardando chamada POST /v2/pay do Software de Restaurante..."*
+Quando não há transação ativa exibe: *"Aguardando chamada POST /v2/pay..."*
 
 ### SELECT VALUES — Inserção de denominações
 
@@ -149,12 +149,12 @@ Exibe as últimas chamadas REST recebidas com timestamp, endpoint e payload resu
 
 ### Pagamento com sucesso (troco)
 
-1. O Software de Restaurante inicia uma operação — o campo **Pedido** é preenchido na Transação Activa
+1. O sistema integrado inicia uma operação — o campo **Pedido** é preenchido na Transação Activa
 2. Usar os botões **+** nas denominações para compor o valor entregue
 3. Clicar em **Simulate** para confirmar os valores
 4. Clicar em **Finalizar Pagamento**
 5. O simulador retorna `COMPLETED` com `totalInput` = valor entregue
-6. O Software de Restaurante calcula e exibe o troco (`Entregue − Pedido`)
+6. O sistema integrado calcula e exibe o troco (`Entregue − Pedido`)
 
 ### Simulação de erro
 
@@ -181,7 +181,7 @@ O simulador expõe os endpoints da ATCash REST API v2 em `https://127.0.0.1:4433
 | GET | `/v2/levels` | Retorna níveis de cédulas/moedas |
 | GET | `/` | Interface web |
 
-SSL auto-assinado — o cliente deve ignorar erros de certificado (já configurado no Software de Restaurante e no Electron).
+SSL auto-assinado — o cliente deve ignorar erros de certificado.
 
 ---
 
