@@ -797,7 +797,33 @@ async function router(req, res) {
     addLog('PAYOUT ' + fmt(state.requestedAmount));
     return send(res, { code: 100, data: state.transactionUuid });
   }
-  if (p === '/v2/changeCash'          && method === 'POST') { const b=await parseBody(req); addLog('CHANGE '+b.action); return send(res,{code:100,data:randomUuid()}); }
+  if (p === '/v2/changeCash' && method === 'POST') {
+    // Dar troco (destrocar) - operacao em 3 etapas (doc AT Cash 2.8):
+    //   openFeed  -> abre os feeds; o operador insere dinheiro pela UI (/insert-denom)
+    //   closeFeed -> fecha os feeds; o total inserido fica contabilizado
+    //   changeAmount -> dispensa as denominacoes indicadas ao utilizador
+    const b = await parseBody(req);
+    addLog('CHANGE ' + b.action);
+    if (b.action === 'openFeed') {
+      resetTransaction();
+      state.transactionUuid = randomUuid();
+      state.startTime       = Date.now();
+      return send(res, { code: 100, data: state.transactionUuid });
+    }
+    if (b.action === 'closeFeed') {
+      return send(res, { code: 100, data: state.transactionUuid || randomUuid() });
+    }
+    if (b.action === 'changeAmount') {
+      const out = (b.denominations || []).reduce(function(s, d) { return s + (d.count * d.denomination); }, 0);
+      state.finalStatus = 'COMPLETED';
+      state.finalErrors = [];
+      state.finalOutput = out;
+      state.lastChange  = out;
+      addLog('CHANGE dispensado=' + fmt(out));
+      return send(res, { code: 100, data: state.transactionUuid || randomUuid() });
+    }
+    return send(res, { code: 100, data: randomUuid() });
+  }
   if (p === '/v2/cashboxDenomination' && method === 'POST') { addLog('CASHBOX DENOM'); return send(res,{code:100,data:randomUuid()}); }
 
   addLog('404 ' + method + ' ' + p);
