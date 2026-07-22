@@ -1,4 +1,4 @@
-﻿﻿// ATCash Simulator - node simulator.js
+// ATCash Simulator - node simulator.js
 
 const https = require('https');
 const http  = require('http');
@@ -694,6 +694,14 @@ async function router(req, res) {
       state.insertedAmount += d;
       state.insertedItems.push({ denomination: d, currencyType: t });
       addLog('INSERIDO ' + fmt(d) + ' (' + t + ') total=' + fmt(state.insertedAmount) + '/' + fmt(state.requestedAmount));
+      if (state.requestedAmount > 0 && state.insertedAmount >= state.requestedAmount) {
+        const troco = state.insertedAmount - state.requestedAmount;
+        state.finalStatus = 'COMPLETED';
+        state.finalErrors = [];
+        state.finalOutput = troco;
+        state.lastChange  = troco;
+        addLog('AUTO-CONCLUIDO input=' + fmt(state.insertedAmount) + ' troco=' + fmt(troco));
+      }
     }
     return send(res, { ok: true });
   }
@@ -798,10 +806,6 @@ async function router(req, res) {
     return send(res, { code: 100, data: state.transactionUuid });
   }
   if (p === '/v2/changeCash' && method === 'POST') {
-    // Dar troco (destrocar) - operacao em 3 etapas (doc AT Cash 2.8):
-    //   openFeed  -> abre os feeds; o operador insere dinheiro pela UI (/insert-denom)
-    //   closeFeed -> fecha os feeds; o total inserido fica contabilizado
-    //   changeAmount -> dispensa as denominacoes indicadas ao utilizador
     const b = await parseBody(req);
     addLog('CHANGE ' + b.action);
     if (b.action === 'openFeed') {
@@ -833,42 +837,20 @@ async function router(req, res) {
 // ---------------------------------------------------------------------------
 // SSL + Start
 // ---------------------------------------------------------------------------
-function generateCert() {
-  if (fs.existsSync(CERT_FILE) && fs.existsSync(KEY_FILE)) return true;
-  const candidates = [
-    'C:\\Program Files\\Git\\usr\\bin\\openssl.exe',
-    'C:\\Program Files\\Git\\mingw64\\bin\\openssl.exe',
-    'openssl',
-  ];
-  for (const openssl of candidates) {
-    try {
-      execSync(
-        '"' + openssl + '" req -x509 -newkey rsa:2048 -keyout "' + KEY_FILE + '" -out "' + CERT_FILE + '" ' +
-        '-days 3650 -nodes -subj "/CN=ATCash Simulator" ' +
-        '-addext "subjectAltName=IP:127.0.0.1,DNS:localhost"',
-        { stdio: 'pipe' }
-      );
-      console.log('Certificado SSL gerado.');
-      return true;
-    } catch(e) { /* tentar proximo */ }
+const EMBEDDED_CERT = '-----BEGIN CERTIFICATE-----\nMIIDMzCCAhugAwIBAgIUX/C2eqd92nudtaRFGKCu7XhXnrIwDQYJKoZIhvcNAQEL\nBQAwGzEZMBcGA1UEAwwQQVRDYXNoIFNpbXVsYXRvcjAeFw0yNjA3MDgxMzQwMDVa\nFw0zNjA3MDUxMzQwMDVaMBsxGTAXBgNVBAMMEEFUQ2FzaCBTaW11bGF0b3IwggEi\nMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQC4zAfS4QnSWW+j8F9yPYzSfLoA\nYTNvm1P8plyGjApYYaQgKUemfA3SRHR4s8LzVQghG5Dz9PaiMsF0IYJN9d6EWL8h\nsjiVeShBtqZZ8OnP2gEvRxUyEc/n7hrPLrwZ+ZG5+ZOiONunCcCHX2a+kmq1DXoz\ns//+qzZOgcqWRjWk4x95RYWfJ9BQyhyFTS/ZOhJ3iNVgYR9nuF6t2tYJYSZSQ3n9\nooiL4GGSHXxDNDdsziB02O/f+0mJKBkjAnc7DL5zmx8eJOiHLrVDzSY76TXhwuQu\nW8PtXVxiypehROc6WlW6e+zI7c40DAxjYGE9zHUFIsj6zc37kjL77XZ0XXRlAgMB\nAAGjbzBtMB0GA1UdDgQWBBT3Z5fYBmPFzgse8XUjn5DPXbnilTAfBgNVHSMEGDAW\ngBT3Z5fYBmPFzgse8XUjn5DPXbnilTAPBgNVHRMBAf8EBTADAQH/MBoGA1UdEQQT\nMBGHBH8AAAGCCWxvY2FsaG9zdDANBgkqhkiG9w0BAQsFAAOCAQEAfnlo6RWG2aks\nkzggeG+VgSRfyPwefUpoM8ZTGUBKS/oYPIIjdjDhaKdD9PrnsgkCDSIKOCTvTh+Y\nZyGEpMvLelf+D9G0ISG4L8wOnnUCxlo6kZtZTaQBPPBZPsMuCvllDOPhXaUS1gMj\n+67grIkeDRlfb8ICCSz4djPx8/Dp9NJXoOddrXx/IBBh4D9WhPbJyWuqXWs2Ewb0\nxpnD22jwL3dgShlXQ0IJaSRlRKJQryXhMlfVwrpg1LmokbeguWiBOVhRz18S8Q/J\n8W1DqEhmTFjGnhy93k4HVv6xwGBgLEnFGRcljSGZEl2Jk+YUeIkVC6rVBqNqaThY\nOz8waVKx4g==\n-----END CERTIFICATE-----';
+const EMBEDDED_KEY  = '-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC4zAfS4QnSWW+j\n8F9yPYzSfLoAYTNvm1P8plyGjApYYaQgKUemfA3SRHR4s8LzVQghG5Dz9PaiMsF0\nIYJN9d6EWL8hsjiVeShBtqZZ8OnP2gEvRxUyEc/n7hrPLrwZ+ZG5+ZOiONunCcCH\nX2a+kmq1DXozs//+qzZOgcqWRjWk4x95RYWfJ9BQyhyFTS/ZOhJ3iNVgYR9nuF6t\n2tYJYSZSQ3n9ooiL4GGSHXxDNDdsziB02O/f+0mJKBkjAnc7DL5zmx8eJOiHLrVD\nzSY76TXhwuQuW8PtXVxiypehROc6WlW6e+zI7c40DAxjYGE9zHUFIsj6zc37kjL7\n7XZ0XXRlAgMBAAECggEAAph3Caq4gRhZfZN8O7YKmtA+qo+y8b/cQ6GwjgE8ifZB\nIGSECZ4XcZsdia54sANDPHfPJuYLasbMuc1Yr7Ci4ff/I0GGEu9jNd0TZBMCrbUx\nrBDTBuOCKI9LGBrfcHv1ZIfRX4dt6mA0MJKR9l5HGmjojP5bu597AUpIZqjwyvKR\nj27PU2/TP9MaxHTCflKlMjfkm3h0UVWI0/Mlj9HGaacviYAeUyzFRG2uLpUtCQsm\n1Mjqx1UJiLU3Nsp0CGp4AxSulFlg0rMBNCA00thtFBFbE3IPo/sBHMNHwfqGmNf6\njCMWZD6IyOGYKWjmtepLtniXSbZ7aWXki2l1fomIFwKBgQD2ziuQqwb+F7yjZMPJ\nBJIXj9K2ww0j97FXmN8lM8jVrT/KYh+y0RczUmZTGtMZbrHzQP6cOQH8Ow8NKP2e\nekefcVMMrJDXXcir2sFKmcC7+zHuQIm7WjVdAUQMAv7pQNoByVXDuTdkknQ8Na0l\nTipufhPfKt2UcmvQXRmjQWg8wwKBgQC/rnmN/AMmlmYqIId4DO9PWW741GBqvYWp\nXQVIRkZY3mqsN+ePJbFHgGP5qraaYrvYrMLyqWOTvNrpNgtK0HuUxkuA+8+I3cz2\n4Tb6oNZQ4ZQecv8zzzAJdSmDEFvNexRQBCl9YBtbv80yxGsH+wicxYxoaCDb/DPj\nt7efeMGXtwKBgQDFOT3hDnq5BBjvbS9zbJ6eC4V0HOxcSKxD9tqi7P3Zmue1/7Gb\nALGMhpVUZcQ5t5amb9LG3ltyx3Mgrhf103t2s2WNZD0ejUg15Mq/pZw52+MrpBEs\nUUsBdmh9PMuddACCmvRZQqI8UThngPFLNWp8/2070hJddQ4o5Kz/I957ZwKBgQCY\nzWmxOjj4xeRjqNLVbNpJEy5XxlWmQbcPsEvJtdvWdFftOhOqFY4hRcRs/x3aLOM6\nc15lO4tZ9q88Qgz2cwRRMVJ3XEWxAb+m/xpo6VZv26PMMjgnAP92SqPxC1VjlL44\nm1jHzZmBpoDZ+6KnFgNjlke742Zud7qVyZrj0cviOQKBgHI0rBzio+pHsD5EElYz\nfpC8A/a5IuGSqB+zTxApkWH6lyvncC8o35sAYR12Q/8U2Ix5R/QJWtkgW9SRsei4\nszcVgM1WlBrxxlLDhgJ0rVu0A4bJd3jOwf6JZ56z19YzSdyNjpw0G/rjWOEoQzTY\n+uVFWCO1iwtYTAQcVctWzXoL\n-----END PRIVATE KEY-----';
+
+function getCertOpts() {
+  if (fs.existsSync(CERT_FILE) && fs.existsSync(KEY_FILE)) {
+    return { key: fs.readFileSync(KEY_FILE), cert: fs.readFileSync(CERT_FILE) };
   }
-  return false;
+  return { key: EMBEDDED_KEY.replace(/\\n/g, '\n'), cert: EMBEDDED_CERT.replace(/\\n/g, '\n') };
 }
 
-const hasCert = generateCert();
-
-if (hasCert) {
-  const opts = { key: fs.readFileSync(KEY_FILE), cert: fs.readFileSync(CERT_FILE) };
-  https.createServer(opts, router).listen(PORT, function() {
-    console.log('\nATCash Simulator em https://127.0.0.1:' + PORT + '/');
-    console.log('Abre o URL acima no browser para a interface.');
-    console.log('Ctrl+C para parar.\n');
-    addLog('Simulador iniciado em https://127.0.0.1:' + PORT + '/');
-  });
-} else {
-  http.createServer(router).listen(PORT, function() {
-    console.log('\nATCash Simulator em http://127.0.0.1:' + PORT + '/');
-    console.log('AVISO: SSL nao disponivel. Instala Git for Windows.\n');
-    addLog('Simulador iniciado (sem SSL)');
-  });
-}
+const opts = getCertOpts();
+https.createServer(opts, router).listen(PORT, function() {
+  console.log('\nATCash Simulator em https://127.0.0.1:' + PORT + '/');
+  console.log('Abre o URL acima no browser para a interface.');
+  console.log('Ctrl+C para parar.\n');
+  addLog('Simulador iniciado em https://127.0.0.1:' + PORT + '/');
+});
